@@ -1,0 +1,26 @@
+# Deep Learning Framework
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Data Processing
+numpy>=1.24.0
+Pillow>=9.5.0
+pandas>=2.0.0
+
+# Natural Language Processing
+nltk>=3.8.0
+
+# Evaluation Metrics
+nltk>=3.8.0
+pycocoevalcap>=1.2  # For CIDEr and other metrics
+rouge-score>=0.1.2  # For ROUGE metrics
+
+# Utilities
+tqdm>=4.65.0
+matplotlib>=3.7.0
+
+# Optional: For better model performance
+timm>=0.9.0  # PyTorch Image Models
+
+# Development
+jupyter>=1.0.0
