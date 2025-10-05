@@ -33,7 +33,7 @@ class ImageCaptioner:
         print(f"加载模型: {checkpoint_path}")
         
         # 加载检查点
-        checkpoint = torch.load(checkpoint_path, map_location=self.device)
+        checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
         
         # 获取配置和词汇表
         self.config = checkpoint['config']

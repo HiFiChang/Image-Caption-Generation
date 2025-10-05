@@ -69,12 +69,12 @@ class Evaluator:
             references: 参考标注列表
             hypotheses: 生成标注列表
         """
-        references = []  # 每个图像有多个参考标注
-        hypotheses = []  # 每个图像有一个生成标注
+        references_map = {}  # {image_path: [ref1, ref2, ...]}
+        hypotheses_map = {} # {image_path: hypothesis}
         
         print("正在生成标注...")
         with torch.no_grad():
-            for images, captions, lengths in tqdm(data_loader):
+            for images, captions, lengths, image_paths in tqdm(data_loader):
                 images = images.to(self.device)
                 
                 # 生成标注
@@ -88,6 +88,8 @@ class Evaluator:
                 
                 # 转换为词列表
                 for i in range(images.size(0)):
+                    image_path = image_paths[i]
+
                     # 参考标注（真实标注）
                     ref_indices = captions[i, :lengths[i]].cpu().tolist()
                     ref_words = self.vocab.decode(ref_indices)
@@ -95,20 +97,29 @@ class Evaluator:
                     ref_words = [w for w in ref_words if w not in 
                                 [self.vocab.start_token, self.vocab.end_token, 
                                  self.vocab.pad_token]]
-                    references.append([ref_words])  # BLEU需要列表的列表
                     
-                    # 生成标注
-                    gen_indices = generated_ids[i].cpu().tolist()
-                    gen_words = self.vocab.decode(gen_indices)
-                    # 移除特殊标记，并在遇到END标记时停止
-                    gen_words_clean = []
-                    for w in gen_words:
-                        if w == self.vocab.end_token:
-                            break
-                        if w not in [self.vocab.start_token, self.vocab.pad_token]:
-                            gen_words_clean.append(w)
-                    hypotheses.append(gen_words_clean)
-        
+                    if image_path not in references_map:
+                        references_map[image_path] = []
+                    references_map[image_path].append(ref_words)
+                    
+                    # 生成标注 (只为每个图像生成一次)
+                    if image_path not in hypotheses_map:
+                        gen_indices = generated_ids[i].cpu().tolist()
+                        gen_words = self.vocab.decode(gen_indices)
+                        # 移除特殊标记，并在遇到END标记时停止
+                        gen_words_clean = []
+                        for w in gen_words:
+                            if w == self.vocab.end_token:
+                                break
+                            if w not in [self.vocab.start_token, self.vocab.pad_token]:
+                                gen_words_clean.append(w)
+                        hypotheses_map[image_path] = gen_words_clean
+
+        # 将map转换为评估函数所需的列表格式
+        # 确保references和hypotheses的顺序一致
+        references = list(references_map.values())
+        hypotheses = [hypotheses_map[path] for path in references_map.keys()]
+
         return references, hypotheses
     
     def calculate_bleu(self, references: List, hypotheses: List) -> Dict:
@@ -147,10 +158,10 @@ class Evaluator:
         scores = []
         for ref, hyp in zip(references, hypotheses):
             # METEOR需要字符串形式
-            ref_str = ' '.join(ref[0])
+            ref_strs = [' '.join(r) for r in ref]
             hyp_str = ' '.join(hyp)
             try:
-                score = meteor_score([ref_str], hyp_str)
+                score = meteor_score(ref_strs, hyp_str)
                 scores.append(score)
             except:
                 scores.append(0.0)
@@ -183,9 +194,9 @@ class Evaluator:
             gts = {}  # ground truth
             res = {}  # results
             
-            for i, (ref, hyp) in enumerate(zip(references, hypotheses)):
+            for i, (ref_list, hyp) in enumerate(zip(references, hypotheses)):
                 # 参考标注（可以有多个）
-                gts[i] = [' '.join(ref[0])]
+                gts[i] = [' '.join(r) for r in ref_list]
                 # 生成标注（只有一个）
                 res[i] = [' '.join(hyp)]
             
@@ -225,14 +236,15 @@ class Evaluator:
             rouge2_scores = []
             rougeL_scores = []
             
-            for ref, hyp in zip(references, hypotheses):
-                ref_str = ' '.join(ref[0])
+            for ref_list, hyp in zip(references, hypotheses):
+                ref_strs = [' '.join(r) for r in ref_list]
                 hyp_str = ' '.join(hyp)
                 
-                if not ref_str or not hyp_str:
+                if not ref_strs or not hyp_str:
                     continue
                 
-                scores = scorer.score(ref_str, hyp_str)
+                # ROUGE-score can handle multiple references
+                scores = scorer.score_multi(ref_strs, hyp_str)
                 rouge1_scores.append(scores['rouge1'].fmeasure)
                 rouge2_scores.append(scores['rouge2'].fmeasure)
                 rougeL_scores.append(scores['rougeL'].fmeasure)
@@ -326,7 +338,7 @@ class Evaluator:
         num_samples = min(100, len(references))
         for i in range(num_samples):
             results['samples'].append({
-                'reference': ' '.join(references[i][0]),
+                'references': [' '.join(r) for r in references[i]],
                 'hypothesis': ' '.join(hypotheses[i])
             })
         
@@ -348,7 +360,7 @@ def load_model_from_checkpoint(checkpoint_path: str, device):
     """
     print(f"从检查点加载模型: {checkpoint_path}")
     
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     
     # 获取配置和词汇表
     config = checkpoint['config']

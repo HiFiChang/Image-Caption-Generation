@@ -69,7 +69,7 @@ class Flickr8kDataset(Dataset):
     def __len__(self):
         return len(self.samples)
     
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int, str]:
         """
         获取数据样本
         Returns:
@@ -103,7 +103,7 @@ class Flickr8kDataset(Dataset):
         
         caption_tensor = torch.tensor(caption_indices, dtype=torch.long)
         
-        return image, caption_tensor, length
+        return image, caption_tensor, length, sample['image_path']
 
 
 def collate_fn(batch):
@@ -114,7 +114,7 @@ def collate_fn(batch):
     # 按标注长度排序（降序）
     batch.sort(key=lambda x: x[2], reverse=True)
     
-    images, captions, lengths = zip(*batch)
+    images, captions, lengths, image_paths = zip(*batch)
     
     # 堆叠图像
     images = torch.stack(images, 0)
@@ -125,7 +125,7 @@ def collate_fn(batch):
     # 转换长度为张量
     lengths = torch.tensor(lengths, dtype=torch.long)
     
-    return images, captions, lengths
+    return images, captions, lengths, image_paths
 
 
 def get_data_loader(dataset_path: str,
@@ -183,10 +183,11 @@ if __name__ == "__main__":
     )
     
     # 测试获取样本
-    image, caption, length = dataset[0]
+    image, caption, length, image_path = dataset[0]
     print(f"图像形状: {image.shape}")
     print(f"标注形状: {caption.shape}")
     print(f"标注长度: {length}")
+    print(f"图像路径: {image_path}")
     print(f"标注索引: {caption[:length]}")
     print(f"标注文本: {vocab.decode(caption[:length].tolist())}")
     
@@ -199,6 +200,13 @@ if __name__ == "__main__":
         batch_size=4,
         num_workers=0
     )
+    
+    # 测试一个批次
+    images, captions, lengths, image_paths = next(iter(data_loader))
+    print(f"\n批次图像形状: {images.shape}")
+    print(f"批次标注形状: {captions.shape}")
+    print(f"批次长度: {lengths}")
+    print(f"批次图像路径: {image_paths}")
     
     for images, captions, lengths in data_loader:
         print(f"\n批次:")
