@@ -5,7 +5,7 @@
 import torch
 import torch.nn as nn
 from encoder import EncoderCNN, EncoderViT
-from decoder import DecoderLSTM, DecoderGRU
+from decoder import DecoderLSTM, DecoderGRU, DecoderTransformer
 
 
 class ImageCaptioningModel(nn.Module):
@@ -18,7 +18,8 @@ class ImageCaptioningModel(nn.Module):
                  num_layers: int = 1,
                  dropout: float = 0.5,
                  encoder_type: str = 'resnet50',
-                 decoder_type: str = 'lstm'):
+                 decoder_type: str = 'lstm',
+                 **kwargs):
         """
         初始化模型
         Args:
@@ -28,7 +29,7 @@ class ImageCaptioningModel(nn.Module):
             num_layers: RNN层数
             dropout: Dropout比例
             encoder_type: 编码器类型 ('resnet50', 'resnet101', 'vit_b_16')
-            decoder_type: 解码器类型 ('lstm', 'gru')
+            decoder_type: 解码器类型 ('lstm', 'gru', 'transformer')
         """
         super(ImageCaptioningModel, self).__init__()
         
@@ -67,6 +68,16 @@ class ImageCaptioningModel(nn.Module):
                 hidden_size=hidden_size,
                 vocab_size=vocab_size,
                 num_layers=num_layers,
+                dropout=dropout
+            )
+        elif decoder_type == 'transformer':
+            self.decoder = DecoderTransformer(
+                embed_size=embed_size,
+                vocab_size=vocab_size,
+                num_layers=kwargs.get('decoder_layers', 6),
+                nhead=kwargs.get('nhead', 8),
+                dim_feedforward=kwargs.get('dim_feedforward', 2048),
+                pad_token_idx=kwargs.get('pad_token_idx', 0),
                 dropout=dropout
             )
         else:
@@ -128,8 +139,7 @@ class ImageCaptioningModel(nn.Module):
                 features, 
                 start_token, 
                 end_token,
-                max_length,
-                temperature
+                max_length
             )
         elif method == 'beam_search':
             if images.size(0) > 1:
@@ -169,26 +179,28 @@ class ImageCaptioningModel(nn.Module):
         }
 
 
-def build_model(config: dict, vocab_size: int) -> ImageCaptioningModel:
+def build_model(config: dict) -> ImageCaptioningModel:
     """
     根据配置构建模型
     Args:
         config: 配置字典
-        vocab_size: 词汇表大小
     Returns:
-        ImageCaptioningModel对象
+        模型实例
     """
-    model = ImageCaptioningModel(
-        embed_size=config.get('embed_size', 256),
-        hidden_size=config.get('hidden_size', 512),
-        vocab_size=vocab_size,
-        num_layers=config.get('num_layers', 1),
-        dropout=config.get('dropout', 0.5),
-        encoder_type=config.get('encoder_type', 'resnet50'),
-        decoder_type=config.get('decoder_type', 'lstm')
+    return ImageCaptioningModel(
+        embed_size=config['embed_size'],
+        hidden_size=config['hidden_size'],
+        vocab_size=config['vocab_size'],
+        num_layers=config.get('num_layers', 1), # 使用.get以兼容Transformer
+        dropout=config['dropout'],
+        encoder_type=config['encoder_type'],
+        decoder_type=config['decoder_type'],
+        # Transformer特定参数
+        decoder_layers=config.get('num_layers', 6), # Transformer层数
+        nhead=config.get('nhead', 8),
+        dim_feedforward=config.get('hidden_size', 2048),
+        pad_token_idx=config.get('pad_token_idx', 0)
     )
-    
-    return model
 
 
 if __name__ == "__main__":
@@ -210,7 +222,9 @@ if __name__ == "__main__":
     max_length = 20
     
     # 构建模型
-    model = build_model(config, vocab_size)
+    config['vocab_size'] = vocab_size
+    config['pad_token_idx'] = 0
+    model = build_model(config)
     
     # 统计参数
     param_stats = model.count_parameters()

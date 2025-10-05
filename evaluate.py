@@ -380,7 +380,13 @@ def load_model_from_checkpoint(checkpoint_path: str, device):
     
     # 构建模型
     from model import build_model
-    model = build_model(config, vocab_size=len(vocab))
+    # 兼容旧检查点：确保提供pad_token_idx
+    try:
+        pad_idx = vocab.word2idx[vocab.pad_token]
+    except Exception:
+        pad_idx = 0
+    config['pad_token_idx'] = config.get('pad_token_idx', pad_idx)
+    model = build_model(config)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
     model.eval()

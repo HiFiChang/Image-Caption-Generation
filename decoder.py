@@ -5,6 +5,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 
 class DecoderLSTM(nn.Module):
@@ -217,6 +218,175 @@ class DecoderLSTM(nn.Module):
         # 返回分数最高的序列
         best_sequence = sequences[0]
         return torch.tensor(best_sequence)
+
+
+class PositionalEncoding(nn.Module):
+    """位置编码，为序列中的每个位置添加一个唯一的编码"""
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: [batch_size, seq_len, embed_size]
+        """
+        x = x + self.pe[:, :x.size(1), :]
+        return self.dropout(x)
+
+
+class DecoderTransformer(nn.Module):
+    """Transformer解码器"""
+    
+    def __init__(self, 
+                 embed_size: int,
+                 vocab_size: int,
+                 num_layers: int,
+                 nhead: int,
+                 dim_feedforward: int,
+                 pad_token_idx: int,
+                 dropout: float = 0.5,
+                 **kwargs):
+        """
+        初始化Transformer解码器
+        Args:
+            embed_size: 嵌入维度 (d_model)
+            vocab_size: 词汇表大小
+            num_layers: Transformer解码器层数
+            nhead: 多头注意力头数
+            dim_feedforward: 前馈网络维度
+            pad_token_idx: PAD标记的索引
+            dropout: Dropout比例
+        """
+        super(DecoderTransformer, self).__init__()
+        
+        self.embed_size = embed_size
+        self.vocab_size = vocab_size
+        self.pad_token_idx = pad_token_idx
+        
+        # 词嵌入和位置编码
+        self.embed = nn.Embedding(vocab_size, embed_size)
+        self.pos_encoder = PositionalEncoding(embed_size, dropout)
+        
+        # Transformer解码器层
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=embed_size, 
+            nhead=nhead, 
+            dim_feedforward=dim_feedforward,
+            dropout=dropout,
+            batch_first=True
+        )
+        self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+        
+        # 输出层
+        self.fc = nn.Linear(embed_size, vocab_size)
+        
+        self.init_weights()
+
+    def init_weights(self):
+        """初始化权重"""
+        self.embed.weight.data.uniform_(-0.1, 0.1)
+        self.fc.bias.data.fill_(0)
+        self.fc.weight.data.uniform_(-0.1, 0.1)
+
+    def forward(self, features: torch.Tensor, captions: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
+        """
+        训练时的前向传播
+        Args:
+            features: 图像特征 [batch_size, embed_size]
+            captions: 标注索引 [batch_size, max_length]
+            lengths: 标注长度（Transformer中主要用于生成padding mask）
+        Returns:
+            outputs: 预测输出 [batch_size, max_length, vocab_size]
+        """
+        batch_size, max_len = captions.size()
+        
+        # 1. 准备解码器输入：右移一位，去掉最后一个词
+        # captions: [<START>, w1, w2, ..., w_n, <END>]
+        # decoder_input: [<START>, w1, w2, ..., w_n]
+        decoder_input = captions[:, :-1]
+        
+        # 2. 词嵌入和位置编码
+        embeddings = self.embed(decoder_input) * math.sqrt(self.embed_size)
+        embeddings = self.pos_encoder(embeddings)
+        
+        # 图像特征作为memory
+        memory = features.unsqueeze(1).repeat(1, embeddings.size(1), 1) # [batch_size, seq_len, embed_size]
+        
+        # 3. 生成掩码
+        # 目标序列掩码 (tgt_mask): 防止看到未来的词
+        tgt_mask = self.generate_square_subsequent_mask(decoder_input.size(1)).to(features.device)
+        
+        # 填充掩码 (tgt_key_padding_mask): 忽略<PAD>标记
+        tgt_key_padding_mask = (decoder_input == self.pad_token_idx)
+
+        # 4. Transformer解码
+        output = self.transformer_decoder(
+            tgt=embeddings,
+            memory=memory,
+            tgt_mask=tgt_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask
+        )
+        
+        # 输出层
+        outputs = self.fc(output)
+        return outputs
+
+    def generate_square_subsequent_mask(self, sz: int) -> torch.Tensor:
+        """生成一个上三角矩阵的掩码，用于防止序列中的位置关注到后续位置"""
+        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        return mask
+
+    def sample(self, 
+               features: torch.Tensor, 
+               start_token: int,
+               end_token: int,
+               max_length: int = 50,
+               **kwargs) -> torch.Tensor:
+        """
+        推理时的贪心采样
+        """
+        batch_size = features.size(0)
+        # 初始化生成的序列，以<START>标记开始
+        generated_ids = torch.full((batch_size, 1), start_token, dtype=torch.long, device=features.device)
+        
+        memory = features.unsqueeze(1) # [batch_size, 1, embed_size]
+
+        for _ in range(max_length - 1):
+            # 获取当前序列的嵌入和位置编码
+            tgt_embed = self.embed(generated_ids) * math.sqrt(self.embed_size)
+            tgt_embed = self.pos_encoder(tgt_embed)
+            
+            # 生成目标序列掩码
+            tgt_mask = self.generate_square_subsequent_mask(generated_ids.size(1)).to(features.device)
+            
+            # Transformer解码
+            output = self.transformer_decoder(tgt_embed, memory, tgt_mask=tgt_mask)
+            
+            # 取最后一个时间步的输出
+            last_output = output[:, -1, :]
+            
+            # 预测下一个词
+            logits = self.fc(last_output)
+            _, next_word = torch.max(logits, dim=1)
+            
+            # 将新生成的词添加到序列中
+            generated_ids = torch.cat([generated_ids, next_word.unsqueeze(1)], dim=1)
+            
+            # 如果所有批次都生成了<END>标记，则提前停止
+            if (next_word == end_token).all():
+                break
+        
+        return generated_ids
 
 
 class DecoderGRU(nn.Module):

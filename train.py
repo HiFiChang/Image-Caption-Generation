@@ -46,8 +46,10 @@ class Trainer:
             )
         
         # 构建模型
-        config['vocab_size'] = len(self.vocab)
-        self.model = build_model(config, vocab_size=len(self.vocab))
+        self.config['vocab_size'] = len(self.vocab)
+        # 传递pad_token索引给模型（Transformer使用）
+        self.config['pad_token_idx'] = self.vocab.word2idx[self.vocab.pad_token]
+        self.model = build_model(self.config)
         self.model.to(self.device)
         
         # 定义损失函数（忽略padding的交叉熵）
@@ -90,7 +92,12 @@ class Trainer:
         
         pbar = tqdm(data_loader, desc=f"Epoch {epoch+1}/{self.config['num_epochs']}")
         
-        for i, (images, captions, lengths) in enumerate(pbar):
+        for i, batch in enumerate(pbar):
+            # 兼容数据加载返回3元组或4元组（带image_paths）
+            if len(batch) == 4:
+                images, captions, lengths, _ = batch
+            else:
+                images, captions, lengths = batch
             # 移到设备
             images = images.to(self.device)
             captions = captions.to(self.device)
@@ -104,14 +111,17 @@ class Trainer:
             # captions: [batch_size, max_length]
             # 我们预测captions的下一个词（从第2个位置开始预测）
             
-            # 目标是captions本身（因为decoder的forward已经处理了输入偏移）
-            batch_size = outputs.size(0)
-            max_length = outputs.size(1)
-            vocab_size = outputs.size(2)
+            # 与Transformer/LSTM的teacher forcing对齐：
+            # Decoder 接收 [<START>, w1, ..., w_{T-1}] 作为输入，
+            # 我们应当用 [w1, ..., w_T] 作为目标进行对齐
+            # 统一采用 targets = captions[:, 1:]，outputs 取相同长度的前缀
+            batch_size, out_len, vocab_size = outputs.size()
+            targets = captions[:, 1:out_len+1]
+            outputs = outputs[:, :targets.size(1), :]
             
             # 展平为2D以便计算损失
-            outputs = outputs.reshape(batch_size * max_length, vocab_size)
-            targets = captions.reshape(batch_size * max_length)
+            outputs = outputs.reshape(-1, vocab_size)
+            targets = targets.reshape(-1)
             
             # 计算损失（CrossEntropyLoss会自动忽略ignore_index的位置）
             loss = self.criterion(outputs, targets)
@@ -154,18 +164,24 @@ class Trainer:
         total_loss = 0
         
         with torch.no_grad():
-            for images, captions, lengths in tqdm(data_loader, desc="Validating"):
+            for batch in tqdm(data_loader, desc="Validating"):
+                # 兼容数据加载返回3元组或4元组（带image_paths）
+                if len(batch) == 4:
+                    images, captions, lengths, _ = batch
+                else:
+                    images, captions, lengths = batch
                 images = images.to(self.device)
                 captions = captions.to(self.device)
                 lengths = lengths.to(self.device)
                 
                 outputs = self.model(images, captions, lengths)
                 
-                # 计算损失
-                batch_size = outputs.size(0)
-                vocab_size = outputs.size(2)
+                # 计算损失：与训练时保持一致的对齐
+                batch_size, out_len, vocab_size = outputs.size()
+                targets = captions[:, 1:out_len+1]
+                outputs = outputs[:, :targets.size(1), :]
                 outputs = outputs.reshape(-1, vocab_size)
-                targets = captions.reshape(-1)
+                targets = targets.reshape(-1)
                 
                 loss = self.criterion(outputs, targets)
                 total_loss += loss.item()
@@ -304,8 +320,8 @@ def main():
         'hidden_size': 512,
         'num_layers': 1,
         'dropout': 0.5,
-        'encoder_type': 'resnet50',  # 'resnet50', 'resnet101', 'vit_b_16'
-        'decoder_type': 'lstm',  # 'lstm', 'gru'
+        'encoder_type': 'vit_b_16',  # 'resnet50', 'resnet101', 'vit_b_16'
+        'decoder_type': 'transformer',  # 'lstm', 'gru'， 'transformer'
         
         # 训练相关
         'batch_size': 64,
@@ -316,10 +332,11 @@ def main():
         'num_workers': 4,
         
         # 保存和日志
-        'checkpoint_dir': 'checkpoints',
+        'checkpoint_dir': None,
         'save_step': 1,
         'log_step': 100
     }
+    config['checkpoint_dir'] = f"checkpoints_{config['encoder_type']}_{config['decoder_type']}"
     
     # 打印配置
     print("训练配置:")

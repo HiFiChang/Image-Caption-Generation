@@ -87,6 +87,22 @@ config_debug = {
 
 
 # ============================================
+# Transformer配置 - ResNet50 + Transformer
+# ============================================
+config_transformer = {
+    **config_baseline,
+    'decoder_type': 'transformer',
+    'embed_size': 512,  # Transformer通常需要更大的嵌入维度
+    'hidden_size': 2048, # 在Transformer中用作dim_feedforward
+    'num_layers': 6, # Transformer解码器层数
+    'nhead': 8, # 多头注意力头数
+    'batch_size': 32,
+    'learning_rate': 5e-5, # Transformer通常需要更小的学习率
+    'checkpoint_dir': 'checkpoints_transformer',
+}
+
+
+# ============================================
 # 如何使用
 # ============================================
 """
