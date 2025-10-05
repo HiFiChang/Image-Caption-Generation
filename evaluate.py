@@ -156,17 +156,24 @@ class Evaluator:
         print("\n计算METEOR分数...")
         
         scores = []
-        for ref, hyp in zip(references, hypotheses):
+        failed_count = 0
+        for i, (ref, hyp) in enumerate(zip(references, hypotheses)):
             # METEOR需要字符串形式
             ref_strs = [' '.join(r) for r in ref]
             hyp_str = ' '.join(hyp)
             try:
                 score = meteor_score(ref_strs, hyp_str)
                 scores.append(score)
-            except:
+            except Exception as e:
+                if failed_count == 0:  # 只打印第一个错误
+                    print(f"  警告: METEOR计算失败 (样本 {i}): {e}")
+                failed_count += 1
                 scores.append(0.0)
         
-        avg_score = sum(scores) / len(scores)
+        if failed_count > 0:
+            print(f"  共有 {failed_count}/{len(references)} 个样本METEOR计算失败")
+        
+        avg_score = sum(scores) / len(scores) if scores else 0.0
         print(f"METEOR: {avg_score:.4f}")
         
         return avg_score
