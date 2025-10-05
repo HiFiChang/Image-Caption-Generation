@@ -158,15 +158,20 @@ class Evaluator:
         scores = []
         failed_count = 0
         for i, (ref, hyp) in enumerate(zip(references, hypotheses)):
-            # METEOR需要字符串形式
-            ref_strs = [' '.join(r) for r in ref]
-            hyp_str = ' '.join(hyp)
+            # METEOR需要分词后的列表形式（不是字符串）
+            # ref 已经是 [[word1, word2, ...], [word1, word2, ...]]
+            # hyp 已经是 [word1, word2, ...]
             try:
-                score = meteor_score(ref_strs, hyp_str)
+                score = meteor_score(ref, hyp)
                 scores.append(score)
             except Exception as e:
                 if failed_count == 0:  # 只打印第一个错误
                     print(f"  警告: METEOR计算失败 (样本 {i}): {e}")
+                    print(f"  ref type: {type(ref)}, hyp type: {type(hyp)}")
+                    if ref:
+                        print(f"  ref[0] sample: {ref[0][:5]}")
+                    if hyp:
+                        print(f"  hyp sample: {hyp[:5]}")
                 failed_count += 1
                 scores.append(0.0)
         
