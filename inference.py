@@ -40,7 +40,9 @@ class ImageCaptioner:
         self.vocab = checkpoint['vocab']
         
         # 构建模型
-        self.model = build_model(self.config, vocab_size=len(self.vocab))
+        self.config['vocab_size'] = len(self.vocab)
+        self.config['pad_token_idx'] = self.vocab.word2idx.get(self.vocab.pad_token, 0)
+        self.model = build_model(self.config)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.to(self.device)
         self.model.eval()

@@ -96,8 +96,10 @@ class Trainer:
             # 兼容数据加载返回3元组或4元组（带image_paths）
             if len(batch) == 4:
                 images, captions, lengths, _ = batch
-            else:
+            elif len(batch) == 3:
                 images, captions, lengths = batch
+            else:
+                raise ValueError(f"不支持的批处理数据格式，期望3或4个元素，得到{len(batch)}个")
             # 移到设备
             images = images.to(self.device)
             captions = captions.to(self.device)
@@ -107,20 +109,27 @@ class Trainer:
             outputs = self.model(images, captions, lengths)
             
             # 计算损失
-            # outputs: [batch_size, max_length, vocab_size]
+            # outputs: [batch_size, seq_len, vocab_size]
             # captions: [batch_size, max_length]
-            # 我们预测captions的下一个词（从第2个位置开始预测）
             
-            # 与Transformer/LSTM的teacher forcing对齐：
-            # Decoder 接收 [<START>, w1, ..., w_{T-1}] 作为输入，
-            # 我们应当用 [w1, ..., w_T] 作为目标进行对齐
-            # 统一采用 targets = captions[:, 1:]，outputs 取相同长度的前缀
-            batch_size, out_len, vocab_size = outputs.size()
-            targets = captions[:, 1:out_len+1]
-            outputs = outputs[:, :targets.size(1), :]
+            # 对于不同解码器的统一处理：
+            # - LSTM/GRU解码器：输出长度等于输入长度
+            # - Transformer解码器：输出长度 = 输入长度 - 1 (因为去掉了最后一个词)
+            
+            if self.config['decoder_type'] == 'transformer':
+                # Transformer: decoder_input是captions[:-1], 目标是captions[1:]
+                targets = captions[:, 1:outputs.size(1)+1]
+            else:
+                # LSTM/GRU: 输入包含图像特征+captions[:-1], 目标是captions[1:]
+                targets = captions[:, 1:outputs.size(1)+1]
+            
+            # 确保维度匹配
+            min_len = min(outputs.size(1), targets.size(1))
+            outputs = outputs[:, :min_len, :]
+            targets = targets[:, :min_len]
             
             # 展平为2D以便计算损失
-            outputs = outputs.reshape(-1, vocab_size)
+            outputs = outputs.reshape(-1, outputs.size(-1))
             targets = targets.reshape(-1)
             
             # 计算损失（CrossEntropyLoss会自动忽略ignore_index的位置）
@@ -168,8 +177,10 @@ class Trainer:
                 # 兼容数据加载返回3元组或4元组（带image_paths）
                 if len(batch) == 4:
                     images, captions, lengths, _ = batch
-                else:
+                elif len(batch) == 3:
                     images, captions, lengths = batch
+                else:
+                    raise ValueError(f"不支持的批处理数据格式，期望3或4个元素，得到{len(batch)}个")
                 images = images.to(self.device)
                 captions = captions.to(self.device)
                 lengths = lengths.to(self.device)
@@ -177,10 +188,17 @@ class Trainer:
                 outputs = self.model(images, captions, lengths)
                 
                 # 计算损失：与训练时保持一致的对齐
-                batch_size, out_len, vocab_size = outputs.size()
-                targets = captions[:, 1:out_len+1]
-                outputs = outputs[:, :targets.size(1), :]
-                outputs = outputs.reshape(-1, vocab_size)
+                if self.config['decoder_type'] == 'transformer':
+                    targets = captions[:, 1:outputs.size(1)+1]
+                else:
+                    targets = captions[:, 1:outputs.size(1)+1]
+                
+                # 确保维度匹配
+                min_len = min(outputs.size(1), targets.size(1))
+                outputs = outputs[:, :min_len, :]
+                targets = targets[:, :min_len]
+                
+                outputs = outputs.reshape(-1, outputs.size(-1))
                 targets = targets.reshape(-1)
                 
                 loss = self.criterion(outputs, targets)
