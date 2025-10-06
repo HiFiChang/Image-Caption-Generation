@@ -10,6 +10,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from tqdm import tqdm
 import json
+import argparse
 
 from vocabulary import Vocabulary, build_vocab_from_dataset
 from dataset import get_data_loader
@@ -323,38 +324,89 @@ class Trainer:
             json.dump(history, f, indent=2)
 
 
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='训练图像描述生成模型')
+    
+    # 模型参数
+    parser.add_argument('--encoder_type', type=str, default='resnet50',
+                        choices=['resnet50', 'resnet101', 'resnet152', 'vit_b_16', 'vit_l_16'],
+                        help='编码器类型')
+    parser.add_argument('--decoder_type', type=str, default='lstm',
+                        choices=['lstm', 'gru', 'transformer'],
+                        help='解码器类型')
+    parser.add_argument('--embed_size', type=int, default=256, help='嵌入维度')
+    parser.add_argument('--hidden_size', type=int, default=512, help='隐藏层维度')
+    parser.add_argument('--num_layers', type=int, default=1, help='RNN/Transformer层数')
+    parser.add_argument('--dropout', type=float, default=0.5, help='Dropout比例')
+    
+    # 训练参数
+    parser.add_argument('--batch_size', type=int, default=64, help='批次大小')
+    parser.add_argument('--num_epochs', type=int, default=30, help='训练轮数')
+    parser.add_argument('--learning_rate', type=float, default=1e-3, help='学习率')
+    parser.add_argument('--weight_decay', type=float, default=1e-5, help='权重衰减')
+    parser.add_argument('--grad_clip', type=float, default=5.0, help='梯度裁剪')
+    parser.add_argument('--num_workers', type=int, default=4, help='数据加载器工作进程数')
+    
+    # 数据参数
+    parser.add_argument('--dataset_path', type=str, default='flickr8k_aim3/dataset_flickr8k.json',
+                        help='数据集路径')
+    parser.add_argument('--images_dir', type=str, default='flickr8k_aim3/images',
+                        help='图像目录')
+    parser.add_argument('--vocab_path', type=str, default='flickr8k_aim3/vocabulary.pkl',
+                        help='词汇表路径')
+    parser.add_argument('--freq_threshold', type=int, default=5, help='词频阈值')
+    
+    # 保存和日志参数
+    parser.add_argument('--checkpoint_dir', type=str, default=None,
+                        help='检查点保存目录，默认根据模型类型自动生成')
+    parser.add_argument('--save_step', type=int, default=1, help='保存步长')
+    parser.add_argument('--log_step', type=int, default=100, help='日志步长')
+    
+    # Transformer特定参数
+    parser.add_argument('--nhead', type=int, default=8, help='Transformer注意力头数')
+    
+    return parser.parse_args()
+
+
 def main():
     """主函数"""
-    # 配置参数
+    args = parse_args()
+    
+    # 构建配置字典
     config = {
         # 数据相关
-        'dataset_path': 'flickr8k_aim3/dataset_flickr8k.json',
-        'images_dir': 'flickr8k_aim3/images',
-        'vocab_path': 'flickr8k_aim3/vocabulary.pkl',
-        'freq_threshold': 5,
+        'dataset_path': args.dataset_path,
+        'images_dir': args.images_dir,
+        'vocab_path': args.vocab_path,
+        'freq_threshold': args.freq_threshold,
         
         # 模型相关
-        'embed_size': 256,
-        'hidden_size': 512,
-        'num_layers': 1,
-        'dropout': 0.5,
-        'encoder_type': 'vit_b_16',  # 'resnet50', 'resnet101', 'vit_b_16'
-        'decoder_type': 'transformer',  # 'lstm', 'gru'， 'transformer'
+        'embed_size': args.embed_size,
+        'hidden_size': args.hidden_size,
+        'num_layers': args.num_layers,
+        'dropout': args.dropout,
+        'encoder_type': args.encoder_type,
+        'decoder_type': args.decoder_type,
+        'nhead': args.nhead,  # Transformer专用
         
         # 训练相关
-        'batch_size': 64,
-        'num_epochs': 30,
-        'learning_rate': 1e-3,
-        'weight_decay': 1e-5,
-        'grad_clip': 5.0,
-        'num_workers': 4,
+        'batch_size': args.batch_size,
+        'num_epochs': args.num_epochs,
+        'learning_rate': args.learning_rate,
+        'weight_decay': args.weight_decay,
+        'grad_clip': args.grad_clip,
+        'num_workers': args.num_workers,
         
         # 保存和日志
-        'checkpoint_dir': None,
-        'save_step': 1,
-        'log_step': 100
+        'checkpoint_dir': args.checkpoint_dir,
+        'save_step': args.save_step,
+        'log_step': args.log_step
     }
-    config['checkpoint_dir'] = f"checkpoints_{config['encoder_type']}_{config['decoder_type']}"
+    
+    # 如果没有指定checkpoint_dir，则自动生成
+    if config['checkpoint_dir'] is None:
+        config['checkpoint_dir'] = f"checkpoints_{config['encoder_type']}_{config['decoder_type']}"
     
     # 打印配置
     print("训练配置:")
