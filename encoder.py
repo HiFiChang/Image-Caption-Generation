@@ -56,7 +56,8 @@ class EncoderCNN(nn.Module):
         Returns:
             features: 特征向量 [batch_size, embed_size]
         """
-        features = self.resnet(images)  # [batch_size, 2048, 1, 1]
+        with torch.no_grad():
+            features = self.resnet(images)  # [batch_size, 2048, 1, 1]
 
         features = features.reshape(features.size(0), -1)  # [batch_size, 2048]
         features = self.fc(features)  # [batch_size, embed_size]
@@ -123,8 +124,11 @@ class EncoderViT(nn.Module):
         Returns:
             features: 特征向量 [batch_size, embed_size]
         """
-        features = self.vit(images)  # [batch_size, hidden_dim]
-        
+        # features = self.vit(images)  # [batch_size, hidden_dim]
+        with torch.no_grad():
+            features = self.vit(images)  # [batch_size, hidden_dim]
+
+
         features = self.projection(features)  # [batch_size, embed_size]
         features = self.bn(features)
         

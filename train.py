@@ -338,11 +338,11 @@ def main():
         'hidden_size': 512,
         'num_layers': 1,
         'dropout': 0.5,
-        'encoder_type': 'resnet50',  # 'resnet50', 'resnet101', 'vit_b_16'
-        'decoder_type': 'lstm',  # 'lstm', 'gru'， 'transformer'
+        'encoder_type': 'vit_b_16',  # 'resnet50', 'resnet101', 'vit_b_16'
+        'decoder_type': 'transformer',  # 'lstm', 'gru'， 'transformer'
         
         # 训练相关
-        'batch_size': 1024,
+        'batch_size': 64,
         'num_epochs': 30,
         'learning_rate': 1e-3,
         'weight_decay': 1e-5,
