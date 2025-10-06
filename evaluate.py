@@ -46,17 +46,19 @@ except LookupError:
 class Evaluator:
     """评估器类"""
     
-    def __init__(self, model: ImageCaptioningModel, vocab: Vocabulary, device):
+    def __init__(self, model: ImageCaptioningModel, vocab: Vocabulary, device, config: dict):
         """
         初始化评估器
         Args:
             model: 图像描述生成模型
             vocab: 词汇表
             device: 设备
+            config: 配置字典
         """
         self.model = model
         self.vocab = vocab
         self.device = device
+        self.config = config
         self.model.eval()
         
     def generate_captions(self, data_loader, max_length: int = 50) -> tuple:
@@ -354,11 +356,18 @@ class Evaluator:
                 'hypothesis': ' '.join(hypotheses[i])
             })
         
+        # 从config获取型号信息
+        encoder_type = self.config.get('encoder_type', 'unknown_encoder')
+        decoder_type = self.config.get('decoder_type', 'unknown_decoder')
+        
+        # 生成文件名
+        filename = f"evaluation_results_{encoder_type}_{decoder_type}.json"
+        
         # 保存到文件
-        with open('evaluation_results.json', 'w', encoding='utf-8') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, ensure_ascii=False)
         
-        print(f"\n评估结果已保存到: evaluation_results.json")
+        print(f"\n评估结果已保存到: {filename}")
 
 
 def load_model_from_checkpoint(checkpoint_path: str, device):
@@ -368,7 +377,7 @@ def load_model_from_checkpoint(checkpoint_path: str, device):
         checkpoint_path: 检查点路径
         device: 设备
     Returns:
-        model, vocab
+        model, vocab, config
     """
     print(f"从检查点加载模型: {checkpoint_path}")
     
@@ -393,7 +402,7 @@ def load_model_from_checkpoint(checkpoint_path: str, device):
     
     print(f"模型加载完成 (Epoch {checkpoint['epoch']+1}, Loss: {checkpoint['loss']:.4f})")
     
-    return model, vocab
+    return model, vocab, config
 
 
 def main():
@@ -418,7 +427,7 @@ def main():
     print(f"使用设备: {device}")
     
     # 加载模型
-    model, vocab = load_model_from_checkpoint(args.checkpoint, device)
+    model, vocab, config = load_model_from_checkpoint(args.checkpoint, device)
     
     # 创建数据加载器
     data_loader = get_data_loader(
@@ -435,7 +444,7 @@ def main():
     print(f"样本数: {len(data_loader.dataset)}")
     
     # 创建评估器并评估
-    evaluator = Evaluator(model, vocab, device)
+    evaluator = Evaluator(model, vocab, device, config)
     results = evaluator.evaluate(data_loader, max_length=args.max_length)
 
 

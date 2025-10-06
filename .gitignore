@@ -35,7 +35,7 @@ checkpoints/
 checkpoints_*/
 *.pkl
 training_history.json
-evaluation_results.json
+evaluation_results*.json
 
 # Jupyter Notebook
 .ipynb_checkpoints
