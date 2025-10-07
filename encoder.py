@@ -142,24 +142,3 @@ class EncoderViT(nn.Module):
         """
         for param in self.vit.parameters():
             param.requires_grad = fine_tune
-
-
-if __name__ == "__main__":
-    # 测试编码器
-    print("测试CNN编码器...")
-    encoder_cnn = EncoderCNN(embed_size=256, model_name='resnet50')
-    
-    # 创建随机输入
-    batch_size = 4
-    images = torch.randn(batch_size, 3, 224, 224)
-    
-    # 前向传播
-    features = encoder_cnn(images)
-    print(f"输入形状: {images.shape}")
-    print(f"输出特征形状: {features.shape}")
-    print(f"模型参数数量: {sum(p.numel() for p in encoder_cnn.parameters()):,}")
-    print(f"可训练参数数量: {sum(p.numel() for p in encoder_cnn.parameters() if p.requires_grad):,}")
-    
-    # 测试微调模式
-    encoder_cnn.fine_tune(True)
-    print(f"\n启用微调后可训练参数数量: {sum(p.numel() for p in encoder_cnn.parameters() if p.requires_grad):,}")

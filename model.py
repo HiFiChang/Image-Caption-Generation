@@ -17,6 +17,9 @@ class ImageCaptioningModel(nn.Module):
                  vocab_size: int = 5000,
                  num_layers: int = 1,
                  dropout: float = 0.5,
+                 nhead: int = 8,
+                 dim_feedforward: int = 2048,
+                 pad_token_idx: int = 0,
                  encoder_type: str = 'resnet50',
                  decoder_type: str = 'lstm',
                  **kwargs):
@@ -74,10 +77,10 @@ class ImageCaptioningModel(nn.Module):
             self.decoder = DecoderTransformer(
                 embed_size=embed_size,
                 vocab_size=vocab_size,
-                num_layers=kwargs.get('decoder_layers', 6),
-                nhead=kwargs.get('nhead', 8),
-                dim_feedforward=kwargs.get('dim_feedforward', 2048),
-                pad_token_idx=kwargs.get('pad_token_idx', 0),
+                num_layers=num_layers,
+                nhead=nhead,
+                dim_feedforward=dim_feedforward,
+                pad_token_idx=pad_token_idx,
                 dropout=dropout
             )
         else:
@@ -141,16 +144,14 @@ class ImageCaptioningModel(nn.Module):
                 end_token,
                 max_length
             )
-        elif method == 'beam_search':
-            if images.size(0) > 1:
-                raise ValueError("束搜索仅支持单张图像")
-            generated_ids = self.decoder.sample_beam_search(
-                features,
-                start_token,
-                end_token,
-                max_length,
-                beam_width
-            )
+        # elif method == 'beam_search':
+        #     generated_ids = self.decoder.sample_beam_search(
+        #         features,
+        #         start_token,
+        #         end_token,
+        #         max_length,
+        #         beam_width
+        #     )
         else:
             raise ValueError(f"不支持的生成方法: {method}")
         
@@ -164,19 +165,19 @@ class ImageCaptioningModel(nn.Module):
         """
         self.encoder.fine_tune(fine_tune)
         
-    def get_trainable_params(self):
-        """获取可训练参数"""
-        return filter(lambda p: p.requires_grad, self.parameters())
+    # def get_trainable_params(self):
+    #     """获取可训练参数"""
+    #     return filter(lambda p: p.requires_grad, self.parameters())
     
-    def count_parameters(self):
-        """统计参数数量"""
-        total = sum(p.numel() for p in self.parameters())
-        trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
-        return {
-            'total': total,
-            'trainable': trainable,
-            'frozen': total - trainable
-        }
+    # def count_parameters(self):
+    #     """统计参数数量"""
+    #     total = sum(p.numel() for p in self.parameters())
+    #     trainable = sum(p.numel() for p in self.parameters() if p.requires_grad)
+    #     return {
+    #         'total': total,
+    #         'trainable': trainable,
+    #         'frozen': total - trainable
+    #     }
 
 
 def build_model(config: dict) -> ImageCaptioningModel:
@@ -191,69 +192,12 @@ def build_model(config: dict) -> ImageCaptioningModel:
         embed_size=config['embed_size'],
         hidden_size=config['hidden_size'],
         vocab_size=config['vocab_size'],
-        num_layers=config.get('num_layers', 1), # 使用.get以兼容Transformer
+        num_layers=config['num_layers'],
         dropout=config['dropout'],
         encoder_type=config['encoder_type'],
         decoder_type=config['decoder_type'],
         # Transformer特定参数
-        decoder_layers=config.get('num_layers', 6), # Transformer层数
-        nhead=config.get('nhead', 8),
-        dim_feedforward=config.get('hidden_size', 2048),
-        pad_token_idx=config.get('pad_token_idx', 0)
+        nhead=config['nhead'],
+        dim_feedforward=config['dim_feedforward'],
+        pad_token_idx=config['pad_token_idx']
     )
-
-
-if __name__ == "__main__":
-    # 测试模型
-    print("测试图像描述生成模型...\n")
-    
-    # 配置
-    config = {
-        'embed_size': 256,
-        'hidden_size': 512,
-        'num_layers': 1,
-        'dropout': 0.5,
-        'encoder_type': 'resnet50',
-        'decoder_type': 'lstm'
-    }
-    
-    vocab_size = 5000
-    batch_size = 4
-    max_length = 20
-    
-    # 构建模型
-    config['vocab_size'] = vocab_size
-    config['pad_token_idx'] = 0
-    model = build_model(config)
-    
-    # 统计参数
-    param_stats = model.count_parameters()
-    print(f"\n参数统计:")
-    print(f"  总参数: {param_stats['total']:,}")
-    print(f"  可训练参数: {param_stats['trainable']:,}")
-    print(f"  冻结参数: {param_stats['frozen']:,}")
-    
-    # 创建随机输入
-    images = torch.randn(batch_size, 3, 224, 224)
-    captions = torch.randint(0, vocab_size, (batch_size, max_length))
-    lengths = torch.tensor([20, 18, 15, 12])
-    
-    # 训练模式前向传播
-    print(f"\n训练模式测试:")
-    outputs = model(images, captions, lengths)
-    print(f"  输入图像形状: {images.shape}")
-    print(f"  输入标注形状: {captions.shape}")
-    print(f"  输出形状: {outputs.shape}")
-    
-    # 推理模式测试
-    print(f"\n推理模式测试:")
-    model.eval()
-    generated = model.generate(
-        images[:1], 
-        start_token=1, 
-        end_token=2,
-        max_length=15,
-        method='greedy'
-    )
-    print(f"  生成序列形状: {generated.shape}")
-    print(f"  生成序列: {generated}")

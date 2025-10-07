@@ -14,20 +14,14 @@ from itertools import product
 from datetime import datetime
 from pathlib import Path
 
-# --- 配置区 ---
-
-# 1. 定义要测试的编码器和解码器组合
-ENCODERS = ['resnet50', 'resnet101', 'vit_b_16']
+ENCODERS = ['resnet50', 'resnet101', 'vit_b_16', 'vit_l_16']
 DECODERS = ['lstm', 'gru', 'transformer']
 
-# 2. 定义输出的CSV文件名
 RESULTS_CSV_FILE = 'experiment_results.csv'
 
-# 3. 定义训练和评估的Python脚本
 TRAIN_SCRIPT = 'train.py'
 EVALUATE_SCRIPT = 'evaluate.py'
 
-# --- 脚本核心逻辑 ---
 
 def log(message):
     """打印带时间戳的日志信息"""
@@ -61,7 +55,6 @@ def run_command(command):
         return None
 
 def parse_evaluation_output(output_text: str) -> dict:
-    """从评估脚本的输出中解析评估指标"""
     metrics = {}
     patterns = {
         'BLEU-1': r'BLEU-1:\s*([\d.]+)',
@@ -81,7 +74,6 @@ def parse_evaluation_output(output_text: str) -> dict:
     return metrics
 
 def initialize_csv():
-    """初始化CSV文件，如果不存在则写入表头"""
     if not os.path.exists(RESULTS_CSV_FILE):
         log(f"创建新的结果文件: {RESULTS_CSV_FILE}")
         with open(RESULTS_CSV_FILE, 'w', newline='', encoding='utf-8') as f:
@@ -94,14 +86,12 @@ def initialize_csv():
             writer.writerow(header)
 
 def append_to_csv(result_data: dict):
-    """将单次实验的结果追加到CSV文件中"""
     with open(RESULTS_CSV_FILE, 'a', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=result_data.keys())
         writer.writerow(result_data)
     log(f"结果已保存到: {RESULTS_CSV_FILE}")
 
 def main():
-    """主函数，执行完整的实验流程"""
     if not check_required_files():
         return
 
@@ -133,6 +123,30 @@ def main():
             '--encoder_type', encoder,
             '--decoder_type', decoder
         ]
+        
+        # 根据decoder类型调整参数
+        if decoder == 'transformer':
+            # Transformer专用参数
+            train_command.extend([
+                '--embed_size', '512',      # Transformer需要更大的嵌入维度
+                '--dim_feedforward', '2048',    # dim_feedforward = 4 * embed_size
+                '--num_layers', '6',
+                '--dropout', '0.2',         # Transformer的dropout通常较小（0.1-0.3）
+                '--batch_size', '64',
+                '--learning_rate', '5e-5',  # Transformer需要更小的学习率（避免训练不稳定）
+                '--nhead', '8'              # 8头注意力（512/8=64，标准配置）
+            ])
+        elif decoder in ['lstm', 'gru']:
+            # RNN系列参数
+            train_command.extend([
+                '--embed_size', '256',      # RNN用较小维度即可
+                '--hidden_size', '512',     # LSTM/GRU隐藏层大小
+                '--num_layers', '1',        # 单层RNN避免过拟合
+                '--dropout', '0.5',         # 标准dropout
+                '--batch_size', '64',       # RNN显存需求小
+                '--learning_rate', '1e-3'   # Adam标准学习率
+            ])
+        
         train_result = run_command(train_command)
 
         if train_result and train_result.returncode == 0:

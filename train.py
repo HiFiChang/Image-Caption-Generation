@@ -99,8 +99,6 @@ class Trainer:
                 images, captions, lengths, _ = batch
             elif len(batch) == 3:
                 images, captions, lengths = batch
-            else:
-                raise ValueError(f"不支持的批处理数据格式，期望3或4个元素，得到{len(batch)}个")
             # 移到设备
             images = images.to(self.device)
             captions = captions.to(self.device)
@@ -177,13 +175,7 @@ class Trainer:
         
         with torch.no_grad():
             for batch in tqdm(data_loader, desc="Validating"):
-                # 兼容数据加载返回3元组或4元组（带image_paths）
-                if len(batch) == 4:
-                    images, captions, lengths, _ = batch
-                elif len(batch) == 3:
-                    images, captions, lengths = batch
-                else:
-                    raise ValueError(f"不支持的批处理数据格式，期望3或4个元素，得到{len(batch)}个")
+                images, captions, lengths, _ = batch
                 images = images.to(self.device)
                 captions = captions.to(self.device)
                 lengths = lengths.to(self.device)
@@ -392,8 +384,10 @@ def main():
         'dropout': args.dropout,
         'encoder_type': args.encoder_type,
         'decoder_type': args.decoder_type,
-        'nhead': args.nhead,  # Transformer专用
-        
+        'nhead': args.nhead,
+        'dim_feedforward': args.dim_feedforward,
+        'pad_token_idx': args.pad_token_idx,
+
         # 训练相关
         'batch_size': args.batch_size,
         'num_epochs': args.num_epochs,

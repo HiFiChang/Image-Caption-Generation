@@ -446,19 +446,3 @@ def main():
     # 创建评估器并评估
     evaluator = Evaluator(model, vocab, device, config)
     results = evaluator.evaluate(data_loader, max_length=args.max_length)
-
-
-if __name__ == "__main__":
-    # 如果直接运行，使用默认参数
-    import sys
-    if len(sys.argv) == 1:
-        print("使用示例: python evaluate.py --checkpoint checkpoints/best_model.pth --split test")
-        print("\n使用默认配置进行测试...")
-        
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        # 这里仅作为示例，实际使用时需要提供检查点路径
-        print("\n注意: 请先训练模型，然后使用以下命令评估:")
-        print("python evaluate.py --checkpoint checkpoints/best_model.pth --split test")
-    else:
-        main()

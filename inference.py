@@ -253,18 +253,3 @@ def main():
             visualize_result(args.image, caption)
     
     print(f"\n{'='*50}")
-
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) == 1:
-        print("使用示例:")
-        print("python inference.py --checkpoint checkpoints/best_model.pth --image flickr8k_aim3/images/1000268201_693b08cb0e.jpg")
-        print("\n其他选项:")
-        print("  --method beam_search    # 使用束搜索")
-        print("  --beam_width 5          # 束搜索宽度")
-        print("  --visualize             # 可视化结果")
-        print("  --multiple 5            # 生成5个不同的描述")
-    else:
-        main()
