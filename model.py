@@ -165,9 +165,9 @@ class ImageCaptioningModel(nn.Module):
         """
         self.encoder.fine_tune(fine_tune)
         
-    # def get_trainable_params(self):
-    #     """获取可训练参数"""
-    #     return filter(lambda p: p.requires_grad, self.parameters())
+    def get_trainable_params(self):
+        """获取可训练参数"""
+        return filter(lambda p: p.requires_grad, self.parameters())
     
     # def count_parameters(self):
     #     """统计参数数量"""

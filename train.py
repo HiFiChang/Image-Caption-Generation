@@ -332,10 +332,14 @@ def parse_args():
                         choices=['lstm', 'gru', 'transformer'],
                         help='解码器类型')
     parser.add_argument('--embed_size', type=int, default=256, help='嵌入维度')
-    parser.add_argument('--hidden_size', type=int, default=512, help='隐藏层维度')
+    parser.add_argument('--hidden_size', type=int, default=512, help='隐藏层维度（CNN）')
     parser.add_argument('--num_layers', type=int, default=1, help='RNN/Transformer层数')
     parser.add_argument('--dropout', type=float, default=0.5, help='Dropout比例')
-    
+    parser.add_argument('--dim_feedforward', type=int, default=2048,
+                        help='前馈层维度（Transformer）')
+    parser.add_argument('--pad_token_idx', type=int, default=0,
+                        help='填充标记索引（Transformer）')
+
     # 训练参数
     parser.add_argument('--batch_size', type=int, default=64, help='批次大小')
     parser.add_argument('--num_epochs', type=int, default=30, help='训练轮数')
