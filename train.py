@@ -118,11 +118,13 @@ class Trainer:
             # - Transformer解码器：输出长度 = 输入长度 - 1 (因为去掉了最后一个词)
             
             if self.config['decoder_type'] == 'transformer':
-                # Transformer: decoder_input是captions[:-1], 目标是captions[1:]
-                targets = captions[:, 1:outputs.size(1)+1]
+                # Transformer 的目标是 captions[1:]
+                # 解码器内部已经处理了输入，输出长度会少1
+                targets = captions[:, 1:outputs.size(1) + 1]
             else:
-                # LSTM/GRU: 输入包含图像特征+captions[:-1], 目标是captions[1:]
-                targets = captions[:, 1:outputs.size(1)+1]
+                # LSTM/GRU 的目标是完整的 captions
+                # 因为它们的 forward 方法内部处理了输入的移位
+                targets = captions
             
             # 确保维度匹配
             min_len = min(outputs.size(1), targets.size(1))
@@ -190,9 +192,11 @@ class Trainer:
                 
                 # 计算损失：与训练时保持一致的对齐
                 if self.config['decoder_type'] == 'transformer':
-                    targets = captions[:, 1:outputs.size(1)+1]
+                    # Transformer 的目标是 captions[1:]
+                    targets = captions[:, 1:outputs.size(1) + 1]
                 else:
-                    targets = captions[:, 1:outputs.size(1)+1]
+                    # LSTM/GRU 的目标是完整的 captions
+                    targets = captions
                 
                 # 确保维度匹配
                 min_len = min(outputs.size(1), targets.size(1))

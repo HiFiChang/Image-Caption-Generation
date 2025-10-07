@@ -153,86 +153,86 @@ class DecoderLSTM(nn.Module):
         sampled_ids = torch.stack(sampled_ids, 1)  # [batch_size, max_length]
         return sampled_ids
     
-    def sample_beam_search(self,
-                           features: torch.Tensor,
-                           start_token: int,
-                           end_token: int,
-                           max_length: int = 50,
-                           beam_width: int = 3) -> torch.Tensor:
-        """
-        使用束搜索进行采样 (简化版本，仅支持单图像)
-        Args:
-            features: 图像特征 [1, embed_size] (仅支持batch_size=1)
-            start_token: 开始标记索引
-            end_token: 结束标记索引
-            max_length: 最大生成长度
-            beam_width: 束宽度
-        Returns:
-            best_sequence: 最佳序列 [1, sequence_length]
-        """
-        if features.size(0) != 1:
-            raise ValueError("束搜索仅支持单张图像 (batch_size=1)")
+    # def sample_beam_search(self,
+    #                        features: torch.Tensor,
+    #                        start_token: int,
+    #                        end_token: int,
+    #                        max_length: int = 50,
+    #                        beam_width: int = 3) -> torch.Tensor:
+    #     """
+    #     使用束搜索进行采样 (简化版本，仅支持单图像)
+    #     Args:
+    #         features: 图像特征 [1, embed_size] (仅支持batch_size=1)
+    #         start_token: 开始标记索引
+    #         end_token: 结束标记索引
+    #         max_length: 最大生成长度
+    #         beam_width: 束宽度
+    #     Returns:
+    #         best_sequence: 最佳序列 [1, sequence_length]
+    #     """
+    #     if features.size(0) != 1:
+    #         raise ValueError("束搜索仅支持单张图像 (batch_size=1)")
         
-        device = features.device
-        k = beam_width
+    #     device = features.device
+    #     k = beam_width
         
-        # 初始化候选序列
-        sequences = [[start_token]]
-        scores = [0.0]
+    #     # 初始化候选序列
+    #     sequences = [[start_token]]
+    #     scores = [0.0]
         
-        # 初始化LSTM状态
-        h_0 = torch.zeros(self.num_layers, 1, self.hidden_size, device=device)
-        c_0 = torch.zeros(self.num_layers, 1, self.hidden_size, device=device)
+    #     # 初始化LSTM状态
+    #     h_0 = torch.zeros(self.num_layers, 1, self.hidden_size, device=device)
+    #     c_0 = torch.zeros(self.num_layers, 1, self.hidden_size, device=device)
         
-        # 使用图像特征初始化第一个时间步
-        inputs = features.unsqueeze(1)  # [1, 1, embed_size]
-        states = (h_0, c_0)
+    #     # 使用图像特征初始化第一个时间步
+    #     inputs = features.unsqueeze(1)  # [1, 1, embed_size]
+    #     states = (h_0, c_0)
         
-        for step in range(max_length):
-            all_candidates = []
+    #     for step in range(max_length):
+    #         all_candidates = []
             
-            for i, (seq, score) in enumerate(zip(sequences, scores)):
-                # 如果序列已结束，直接添加到候选中
-                if seq[-1] == end_token:
-                    all_candidates.append((score, seq))
-                    continue
+    #         for i, (seq, score) in enumerate(zip(sequences, scores)):
+    #             # 如果序列已结束，直接添加到候选中
+    #             if seq[-1] == end_token:
+    #                 all_candidates.append((score, seq))
+    #                 continue
                 
-                # 准备输入
-                if step == 0:
-                    # 第一步使用图像特征
-                    current_input = inputs
-                else:
-                    # 后续步骤使用词嵌入
-                    word_tensor = torch.tensor([[seq[-1]]], device=device)
-                    current_input = self.embed(word_tensor)
+    #             # 准备输入
+    #             if step == 0:
+    #                 # 第一步使用图像特征
+    #                 current_input = inputs
+    #             else:
+    #                 # 后续步骤使用词嵌入
+    #                 word_tensor = torch.tensor([[seq[-1]]], device=device)
+    #                 current_input = self.embed(word_tensor)
                 
-                # LSTM前向传播
-                hiddens, new_states = self.lstm(current_input, states if i == 0 else None)
+    #             # LSTM前向传播
+    #             hiddens, new_states = self.lstm(current_input, states if i == 0 else None)
                 
-                # 预测下一个词
-                outputs = self.fc(hiddens.squeeze(1))  # [1, vocab_size]
-                log_probs = F.log_softmax(outputs, dim=1)
+    #             # 预测下一个词
+    #             outputs = self.fc(hiddens.squeeze(1))  # [1, vocab_size]
+    #             log_probs = F.log_softmax(outputs, dim=1)
                 
-                # 选择top-k候选词
-                top_log_probs, top_indices = log_probs.topk(k)
+    #             # 选择top-k候选词
+    #             top_log_probs, top_indices = log_probs.topk(k)
                 
-                for j in range(k):
-                    candidate_seq = seq + [top_indices[0, j].item()]
-                    candidate_score = score + top_log_probs[0, j].item()
-                    all_candidates.append((candidate_score, candidate_seq))
+    #             for j in range(k):
+    #                 candidate_seq = seq + [top_indices[0, j].item()]
+    #                 candidate_score = score + top_log_probs[0, j].item()
+    #                 all_candidates.append((candidate_score, candidate_seq))
             
-            # 选择最佳的k个候选
-            all_candidates.sort(key=lambda x: x[0], reverse=True)
-            sequences = [seq for _, seq in all_candidates[:k]]
-            scores = [score for score, _ in all_candidates[:k]]
+    #         # 选择最佳的k个候选
+    #         all_candidates.sort(key=lambda x: x[0], reverse=True)
+    #         sequences = [seq for _, seq in all_candidates[:k]]
+    #         scores = [score for score, _ in all_candidates[:k]]
             
-            # 如果所有序列都已结束，提前停止
-            if all(seq[-1] == end_token for seq in sequences):
-                break
+    #         # 如果所有序列都已结束，提前停止
+    #         if all(seq[-1] == end_token for seq in sequences):
+    #             break
         
-        # 返回最佳序列
-        best_sequence = sequences[0]
-        return torch.tensor([best_sequence], device=device)
+    #     # 返回最佳序列
+    #     best_sequence = sequences[0]
+    #     return torch.tensor([best_sequence], device=device)
 
 
 class PositionalEncoding(nn.Module):
@@ -497,80 +497,80 @@ class DecoderGRU(nn.Module):
         sampled_ids = torch.stack(sampled_ids, 1)
         return sampled_ids
 
-    def sample_beam_search(self, features, start_token, end_token, max_length=50, beam_width=3):
-        """
-        使用束搜索进行采样 (简化版本，仅支持单图像)
-        Args:
-            features: 图像特征 [1, embed_size] (仅支持batch_size=1)
-            start_token: 开始标记索引
-            end_token: 结束标记索引
-            max_length: 最大生成长度
-            beam_width: 束宽度
-        Returns:
-            best_sequence: 最佳序列 [1, sequence_length]
-        """
-        if features.size(0) != 1:
-            raise ValueError("束搜索仅支持单张图像 (batch_size=1)")
+    # def sample_beam_search(self, features, start_token, end_token, max_length=50, beam_width=3):
+    #     """
+    #     使用束搜索进行采样 (简化版本，仅支持单图像)
+    #     Args:
+    #         features: 图像特征 [1, embed_size] (仅支持batch_size=1)
+    #         start_token: 开始标记索引
+    #         end_token: 结束标记索引
+    #         max_length: 最大生成长度
+    #         beam_width: 束宽度
+    #     Returns:
+    #         best_sequence: 最佳序列 [1, sequence_length]
+    #     """
+    #     if features.size(0) != 1:
+    #         raise ValueError("束搜索仅支持单张图像 (batch_size=1)")
         
-        device = features.device
-        k = beam_width
+    #     device = features.device
+    #     k = beam_width
         
-        # 初始化候选序列
-        sequences = [[start_token]]
-        scores = [0.0]
+    #     # 初始化候选序列
+    #     sequences = [[start_token]]
+    #     scores = [0.0]
         
-        # 初始化GRU状态
-        h_0 = torch.zeros(self.num_layers, 1, self.hidden_size, device=device)
+    #     # 初始化GRU状态
+    #     h_0 = torch.zeros(self.num_layers, 1, self.hidden_size, device=device)
         
-        # 使用图像特征初始化第一个时间步
-        inputs = features.unsqueeze(1)  # [1, 1, embed_size]
-        states = h_0
+    #     # 使用图像特征初始化第一个时间步
+    #     inputs = features.unsqueeze(1)  # [1, 1, embed_size]
+    #     states = h_0
         
-        for step in range(max_length):
-            all_candidates = []
+    #     for step in range(max_length):
+    #         all_candidates = []
             
-            for i, (seq, score) in enumerate(zip(sequences, scores)):
-                # 如果序列已结束，直接添加到候选中
-                if seq[-1] == end_token:
-                    all_candidates.append((score, seq))
-                    continue
+    #         for i, (seq, score) in enumerate(zip(sequences, scores)):
+    #             # 如果序列已结束，直接添加到候选中
+    #             if seq[-1] == end_token:
+    #                 all_candidates.append((score, seq))
+    #                 continue
                 
-                # 准备输入
-                if step == 0:
-                    # 第一步使用图像特征
-                    current_input = inputs
-                else:
-                    # 后续步骤使用词嵌入
-                    word_tensor = torch.tensor([[seq[-1]]], device=device)
-                    current_input = self.embed(word_tensor)
+    #             # 准备输入
+    #             if step == 0:
+    #                 # 第一步使用图像特征
+    #                 current_input = inputs
+    #             else:
+    #                 # 后续步骤使用词嵌入
+    #                 word_tensor = torch.tensor([[seq[-1]]], device=device)
+    #                 current_input = self.embed(word_tensor)
                 
-                # GRU前向传播
-                hiddens, new_states = self.gru(current_input, states if i == 0 else None)
+    #             # GRU前向传播
+    #             hiddens, new_states = self.gru(current_input, states if i == 0 else None)
                 
-                # 预测下一个词
-                outputs = self.fc(hiddens.squeeze(1))  # [1, vocab_size]
-                log_probs = F.log_softmax(outputs, dim=1)
+    #             # 预测下一个词
+    #             outputs = self.fc(hiddens.squeeze(1))  # [1, vocab_size]
+    #             log_probs = F.log_softmax(outputs, dim=1)
                 
-                # 选择top-k候选词
-                top_log_probs, top_indices = log_probs.topk(k)
+    #             # 选择top-k候选词
+    #             top_log_probs, top_indices = log_probs.topk(k)
                 
-                for j in range(k):
-                    candidate_seq = seq + [top_indices[0, j].item()]
-                    candidate_score = score + top_log_probs[0, j].item()
-                    all_candidates.append((candidate_score, candidate_seq))
+    #             for j in range(k):
+    #                 candidate_seq = seq + [top_indices[0, j].item()]
+    #                 candidate_score = score + top_log_probs[0, j].item()
+    #                 all_candidates.append((candidate_score, candidate_seq))
             
-            # 选择最佳的k个候选
-            all_candidates.sort(key=lambda x: x[0], reverse=True)
-            sequences = [seq for _, seq in all_candidates[:k]]
-            scores = [score for score, _ in all_candidates[:k]]
+    #         # 选择最佳的k个候选
+    #         all_candidates.sort(key=lambda x: x[0], reverse=True)
+    #         sequences = [seq for _, seq in all_candidates[:k]]
+    #         scores = [score for score, _ in all_candidates[:k]]
             
-            # 如果所有序列都已结束，提前停止
-            if all(seq[-1] == end_token for seq in sequences):
-                break
+    #         # 如果所有序列都已结束，提前停止
+    #         if all(seq[-1] == end_token for seq in sequences):
+    #             break
         
-        # 返回最佳序列
-        best_sequence = sequences[0]
-        return torch.tensor([best_sequence], device=device)
+    #     # 返回最佳序列
+    #     best_sequence = sequences[0]
+    #     return torch.tensor([best_sequence], device=device)
 
 
 if __name__ == "__main__":
