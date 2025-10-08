@@ -446,3 +446,6 @@ def main():
     # 创建评估器并评估
     evaluator = Evaluator(model, vocab, device, config)
     results = evaluator.evaluate(data_loader, max_length=args.max_length)
+
+if __name__ == '__main__':
+    main()
