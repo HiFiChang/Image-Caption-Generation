@@ -1,0 +1,13 @@
+combination,encoder,decoder,training_status,evaluation_status,BLEU-1,BLEU-2,BLEU-3,BLEU-4,METEOR,ROUGE-L,CIDEr,timestamp
+resnet50_lstm,resnet50,lstm,success,success,0.5873,0.3987,0.2634,0.1748,0.382,0.4406,0.4465,2025-10-08T12:34:05.793715
+resnet50_gru,resnet50,gru,success,success,0.5944,0.4091,0.2715,0.1777,0.3882,0.4471,0.4765,2025-10-08T12:54:29.957962
+resnet50_transformer,resnet50,transformer,success,success,0.5565,0.3761,0.246,0.1624,0.3918,0.4372,0.4663,2025-10-08T13:15:21.220767
+resnet101_lstm,resnet101,lstm,success,success,0.5789,0.3889,0.2513,0.1628,0.3784,0.4376,0.4299,2025-10-08T13:42:27.661647
+resnet101_gru,resnet101,gru,success,success,0.5894,0.4013,0.2672,0.1756,0.3876,0.4398,0.4654,2025-10-08T14:05:16.292907
+resnet101_transformer,resnet101,transformer,success,success,0.5843,0.3961,0.2603,0.1705,0.3965,0.4434,0.4951,2025-10-08T14:28:22.334798
+vit_b_16_lstm,vit_b_16,lstm,success,success,0.5958,0.4127,0.2761,0.1816,0.397,0.4533,0.496,2025-10-08T15:01:08.122311
+vit_b_16_gru,vit_b_16,gru,success,success,0.5948,0.4131,0.2759,0.1815,0.3979,0.4536,0.4884,2025-10-08T15:57:39.645028
+vit_b_16_transformer,vit_b_16,transformer,success,success,0.5856,0.4015,0.2673,0.1763,0.3992,0.4484,0.4958,2025-10-08T16:54:31.945951
+vit_l_16_lstm,vit_l_16,lstm,success,success,0.5808,0.3984,0.2606,0.1703,0.3876,0.4472,0.4696,2025-10-08T18:01:40.337681
+vit_l_16_gru,vit_l_16,gru,success,success,0.5839,0.403,0.2697,0.1773,0.3996,0.4476,0.4879,2025-10-08T21:15:50.766971
+vit_l_16_transformer,vit_l_16,transformer,success,success,0.5932,0.4094,0.273,0.1793,0.4042,0.4506,0.5028,2025-10-09T00:29:03.866264
